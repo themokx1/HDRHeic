@@ -492,6 +492,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
+
+    /// Re-opening the app (double-click in Finder/Launchpad, or `open`) shows the
+    /// window again — a reliable way in even if the menu-bar icon is hidden.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        openWindow()
+        return true
+    }
 }
 
 @main
