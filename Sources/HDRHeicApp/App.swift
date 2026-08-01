@@ -41,6 +41,7 @@ final class ConfigStore: ObservableObject {
     @Published var debounceSeconds: Int = 5
     @Published var recursive: Bool = true
     @Published var regenerate: String = "newer"   // never | newer | always
+    @Published var deleteSource: Bool = true
 
     init() { load() }
 
@@ -53,6 +54,7 @@ final class ConfigStore: ObservableObject {
         if let recursiveValue = object["recursive"] as? Bool { recursive = recursiveValue }
         if let policy = object["regenerate"] as? String,
            ["never", "newer", "always"].contains(policy) { regenerate = policy }
+        if let delete = object["deleteSource"] as? Bool { deleteSource = delete }
     }
 
     func save() {
@@ -62,6 +64,7 @@ final class ConfigStore: ObservableObject {
             "debounceSeconds": Double(debounceSeconds),
             "recursive": recursive,
             "regenerate": regenerate,
+            "deleteSource": deleteSource,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: object,
                                                   options: [.prettyPrinted, .sortedKeys]) {
@@ -189,7 +192,7 @@ struct ContentView: View {
             logBox
         }
         .padding(20)
-        .frame(width: 580, height: 720)
+        .frame(width: 580, height: 784)
         .onAppear { watcher.refresh(); log.refresh() }
         .onReceive(tick) { _ in watcher.refresh(); log.refresh() }
     }
@@ -247,6 +250,17 @@ struct ContentView: View {
                         .fixedSize()
                         .onChange(of: config.regenerate) { saveAndReload() }
                         Text(regenerateHint)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                Divider()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Original").frame(width: 70, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Toggle("Move the JPEG to the Trash after converting", isOn: $config.deleteSource)
+                            .onChange(of: config.deleteSource) { saveAndReload() }
+                        Text("Recoverable from the Trash. Turn off to keep both files.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()

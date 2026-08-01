@@ -56,6 +56,8 @@ struct Config {
     //   "newer"  — re-convert only when the JPEG is newer than the HEIC (default)
     //   "always" — always re-convert, overwriting the HEIC
     var regenerate: String = "newer"
+    // Move the source JPEG to the Trash after a successful conversion (default on).
+    var deleteSource: Bool = true
 }
 
 func loadConfig() -> Config {
@@ -70,6 +72,7 @@ func loadConfig() -> Config {
     if let recursive = object["recursive"] as? Bool { config.recursive = recursive }
     if let regenerate = object["regenerate"] as? String,
        ["never", "newer", "always"].contains(regenerate) { config.regenerate = regenerate }
+    if let deleteSource = object["deleteSource"] as? Bool { config.deleteSource = deleteSource }
     return config
 }
 
@@ -81,6 +84,7 @@ func saveConfig(_ config: Config) {
         "debounceSeconds": config.debounceSeconds,
         "recursive": config.recursive,
         "regenerate": config.regenerate,
+        "deleteSource": config.deleteSource,
     ]
     if let data = try? JSONSerialization.data(withJSONObject: object,
                                               options: [.prettyPrinted, .sortedKeys]) {
@@ -135,6 +139,7 @@ func convert(_ source: URL, to destination: URL) throws {
 struct ScanResult {
     var converted = 0
     var regenerated = 0
+    var trashed = 0
     var skippedExisting = 0
     var skippedNonHDR = 0
     var failed = 0
@@ -142,10 +147,26 @@ struct ScanResult {
     var summary: String {
         "Converted: \(converted)"
             + (regenerated > 0 ? ", regenerated: \(regenerated)" : "")
+            + (trashed > 0 ? ", JPEG→Trash: \(trashed)" : "")
             + ", skipped (up to date): \(skippedExisting)"
             + ", skipped (not HDR): \(skippedNonHDR)"
             + (failed > 0 ? ", failed: \(failed)" : "")
     }
+}
+
+/// Moves a successfully-converted source JPEG to the Trash (recoverable).
+/// `trashItem` either moves the file to the Trash or throws — so on any error the
+/// JPEG is left untouched, never lost. The real Trash path is logged for proof.
+func trashSource(_ url: URL, into result: inout ScanResult) {
+    var trashedURL: NSURL?
+    do {
+        try FileManager.default.trashItem(at: url, resultingItemURL: &trashedURL)
+    } catch {
+        logLine("Kept JPEG (could not move to Trash): \(url.lastPathComponent) — \(error)")
+        return
+    }
+    result.trashed += 1
+    logLine("Moved to Trash: \(url.lastPathComponent) → \(trashedURL?.path ?? "~/.Trash")")
 }
 
 func modificationDate(_ url: URL) -> Date? {
@@ -219,6 +240,10 @@ func runScan(_ config: Config, verbose: Bool) -> ScanResult {
             } else {
                 result.converted += 1
                 logLine("Converted: \(source.lastPathComponent) → \(heic.lastPathComponent)")
+            }
+            // Only ever remove a JPEG we just successfully converted.
+            if config.deleteSource {
+                trashSource(source, into: &result)
             }
         } catch {
             result.failed += 1
@@ -306,6 +331,7 @@ case "get":
     case "debounceSeconds": print(String(format: "%g", config.debounceSeconds))
     case "recursive": print(config.recursive ? "true" : "false")
     case "regenerate": print(config.regenerate)
+    case "deleteSource": print(config.deleteSource ? "true" : "false")
     default: FileHandle.standardError.write("unknown key\n".data(using: .utf8)!); exit(2)
     }
 
@@ -322,6 +348,7 @@ case "set":
             FileHandle.standardError.write("regenerate must be never|newer|always\n".data(using: .utf8)!); exit(2)
         }
         config.regenerate = value
+    case "deleteSource": config.deleteSource = (value == "true" || value == "1" || value == "yes")
     default: FileHandle.standardError.write("unknown key\n".data(using: .utf8)!); exit(2)
     }
     saveConfig(config)
