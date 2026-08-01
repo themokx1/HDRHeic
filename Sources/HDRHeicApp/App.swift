@@ -124,6 +124,50 @@ final class Watcher: ObservableObject {
     }
 }
 
+// MARK: - Command-line tool
+
+/// Manages a `~/.local/bin/hdrheic` symlink to the app's embedded engine, so the
+/// CLI works from Terminal. Auto-installed once on first launch; toggleable after.
+final class CLIInstaller: ObservableObject {
+    @Published var installed = false
+    let linkPath = NSHomeDirectory() + "/.local/bin/hdrheic"
+
+    func refresh() {
+        let manager = FileManager.default
+        if let destination = try? manager.destinationOfSymbolicLink(atPath: linkPath),
+           manager.fileExists(atPath: destination) {
+            installed = true
+        } else {
+            installed = false
+        }
+    }
+
+    func install() {
+        guard let engine = engineURL()?.path else { return }
+        let manager = FileManager.default
+        let directory = (linkPath as NSString).deletingLastPathComponent
+        try? manager.createDirectory(atPath: directory, withIntermediateDirectories: true)
+        try? manager.removeItem(atPath: linkPath)
+        try? manager.createSymbolicLink(atPath: linkPath, withDestinationPath: engine)
+        refresh()
+    }
+
+    func remove() {
+        try? FileManager.default.removeItem(atPath: linkPath)
+        refresh()
+    }
+
+    /// Install the symlink once, the first time the app is ever launched.
+    func installOnceIfFirstLaunch() {
+        let key = "didAutoInstallCLI"
+        if !UserDefaults.standard.bool(forKey: key) {
+            install()
+            UserDefaults.standard.set(true, forKey: key)
+        }
+        refresh()
+    }
+}
+
 // MARK: - Log
 
 struct LogEntry: Identifiable {
@@ -178,6 +222,7 @@ struct ContentView: View {
     @StateObject private var config = ConfigStore()
     @StateObject private var watcher = Watcher()
     @StateObject private var log = LogStore()
+    @StateObject private var cli = CLIInstaller()
 
     @State private var converting = false
     @State private var lastResult = ""
@@ -192,8 +237,8 @@ struct ContentView: View {
             logBox
         }
         .padding(20)
-        .frame(width: 580, height: 784)
-        .onAppear { watcher.refresh(); log.refresh() }
+        .frame(width: 580, height: 848)
+        .onAppear { watcher.refresh(); log.refresh(); cli.installOnceIfFirstLaunch() }
         .onReceive(tick) { _ in watcher.refresh(); log.refresh() }
     }
 
@@ -261,6 +306,21 @@ struct ContentView: View {
                         Toggle("Move the JPEG to the Trash after converting", isOn: $config.deleteSource)
                             .onChange(of: config.deleteSource) { saveAndReload() }
                         Text("Recoverable from the Trash. Turn off to keep both files.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
+                Divider()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Terminal").frame(width: 70, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Toggle("Install the `hdrheic` command-line tool", isOn: Binding(
+                            get: { cli.installed },
+                            set: { $0 ? cli.install() : cli.remove() }
+                        ))
+                        Text(cli.installed
+                             ? "Linked at ~/.local/bin/hdrheic — run `hdrheic` in Terminal (that folder must be on your PATH)."
+                             : "Adds a `hdrheic` command to ~/.local/bin.")
                             .font(.caption).foregroundStyle(.secondary)
                     }
                     Spacer()
@@ -388,9 +448,28 @@ struct ContentView: View {
 @main
 struct HDRHeicApp: App {
     var body: some Scene {
-        WindowGroup("HDRHeic") {
+        // A single on-demand window (no Dock icon — see LSUIElement in Info.plist).
+        Window("HDRHeic", id: "main") {
             ContentView()
+                .onAppear { NSApp.activate(ignoringOtherApps: true) }
         }
         .windowResizability(.contentSize)
+
+        // Menu-bar presence: a small sun icon in the top-right menu bar.
+        MenuBarExtra("HDRHeic", systemImage: "sun.max.fill") {
+            MenuBarContent()
+        }
+    }
+}
+
+private struct MenuBarContent: View {
+    @Environment(\.openWindow) private var openWindow
+    var body: some View {
+        Button("Open HDRHeic") {
+            openWindow(id: "main")
+            NSApp.activate(ignoringOtherApps: true)
+        }
+        Divider()
+        Button("Quit HDRHeic") { NSApplication.shared.terminate(nil) }
     }
 }

@@ -64,7 +64,9 @@ picks up the new binary.
 ## Download
 
 Downloads page: **https://themokx1.github.io/HDRHeic/** (GitHub Pages, from `docs/`).
-The app itself ships as a GitHub Release asset (`HDRHeic.app.zip`).
+The app ships as a **DMG** (`HDRHeic.dmg`) — open it, drag the app onto the
+Applications shortcut. On first launch the app installs the `hdrheic`
+command-line tool into `~/.local/bin` (toggleable in the window).
 
 ## Cutting a new release
 

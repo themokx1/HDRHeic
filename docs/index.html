@@ -63,7 +63,7 @@
     <img class="icon" src="icon.png" alt="HDRHeic icon">
     <h1>HDRHeic</h1>
     <p class="tagline">Turn HDR JPEGs into 10-bit HDR HEIC — automatically.</p>
-    <a class="download" href="https://github.com/themokx1/HDRHeic/releases/latest/download/HDRHeic.app.zip">Download for macOS</a>
+    <a class="download" href="https://github.com/themokx1/HDRHeic/releases/latest/download/HDRHeic.dmg">Download for macOS</a>
     <div class="req">macOS 13 or later · Apple Silicon · free &amp; open source</div>
   </div>
 
@@ -81,12 +81,11 @@
   <div class="card">
     <h2>Install</h2>
     <ol>
-      <li>Download and unzip <code>HDRHeic.app.zip</code>.</li>
-      <li>Move <strong>HDRHeic.app</strong> to your <code>Applications</code> folder.</li>
+      <li>Open <code>HDRHeic.dmg</code> and drag <strong>HDRHeic.app</strong> onto the <strong>Applications</strong> shortcut.</li>
       <li>First launch: right-click the app → <strong>Open</strong> → <strong>Open</strong> (needed once because the app isn’t notarized).</li>
-      <li>In the window, set your folder and click <strong>Turn On</strong> to start the background watcher.</li>
+      <li>Set your folder and click <strong>Turn On</strong> to start the background watcher.</li>
     </ol>
-    <p class="req">If macOS still refuses to open it, run:<br>
+    <p class="req">On first launch the app also installs a <code>hdrheic</code> command-line tool in <code>~/.local/bin</code> (toggle it in the window). If macOS refuses to open the app, run:<br>
       <code>xattr -dr com.apple.quarantine /Applications/HDRHeic.app</code></p>
   </div>
 
