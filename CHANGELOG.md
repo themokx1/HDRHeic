@@ -2,6 +2,13 @@
 
 All notable changes to HDRHeic. Versions follow `MAJOR.MINOR`.
 
+## 1.7
+
+- Downloads page: favicon, Apple touch icon, and a 1200×630 link-preview card
+  (Open Graph / Twitter) generated from the app icon, so shared links show a
+  real preview. Built by `icon/make_og.swift`.
+- Releases are now built and published by GitHub Actions on every `v*` tag.
+
 ## 1.6
 
 - **Update check.** On launch the app asks GitHub for the latest release and
