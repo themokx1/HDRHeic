@@ -1,0 +1,45 @@
+name: Release
+
+# Push a tag like v1.6 and this builds the app, packages the DMG + zip,
+# and publishes them as a GitHub Release.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build app and DMG
+        run: ./build.sh
+
+      - name: Package zip
+        run: |
+          cd build
+          ditto -c -k --keepParent HDRHeic.app HDRHeic.app.zip
+
+      - name: Verify the bundle
+        run: |
+          set -e
+          test -x build/HDRHeic.app/Contents/MacOS/HDRHeic
+          test -x build/HDRHeic.app/Contents/Resources/hdrheic
+          build/HDRHeic.app/Contents/Resources/hdrheic version
+          /usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" \
+            build/HDRHeic.app/Contents/Info.plist
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            build/HDRHeic.dmg
+            build/HDRHeic.app.zip
+          generate_release_notes: true

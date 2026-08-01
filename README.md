@@ -28,13 +28,22 @@ encoder, so it is fast (~1.5 s per photo) and light on the machine.
 `~/Applications/HDRHeic.app` — a small native (SwiftUI) window, all on one page:
 
 - **Settings:** watched folder (with a *Choose…* button), the delay in seconds,
-  an *Include subfolders* toggle, the *Redo* policy (Never / Newer / Always), and
-  a *Move the JPEG to the Trash after converting* toggle. Changes save immediately
-  and restart the watcher if it is running.
+  an *Include subfolders* toggle, the *Redo* policy (Never / Newer / Always), a
+  *Move the JPEG to the Trash after converting* toggle, and the `hdrheic` CLI
+  toggle. Changes save immediately and restart the watcher if it is running.
 - **Background watcher:** a green/red status light (green = running, red = off)
-  with a *Turn On / Turn Off* button, plus a *Convert now* button for a manual pass.
-- **Recent conversions:** a live list of what was converted and when, read from
-  the log (auto-refreshes).
+  with a *Turn On / Turn Off* button, plus a *Convert now* button that shows an
+  `i / n` progress bar.
+- **Recent conversions:** a live list of what was converted and when, plus a
+  *Problems* section listing failures (with *Clear*).
+- **Banners** for a new version, a missing watch folder, or a watcher pointing at
+  an old copy of the app (one-click *Repair*).
+- **Hungarian** interface when the system language is Hungarian; a welcome sheet
+  asks which folder to watch on first run.
+
+It runs as a **menu-bar app** (no Dock icon): a sun icon with *Convert now*,
+*HDRHeic…* and *Quit*. If the menu-bar icon is hidden by a crowded or notched
+menu bar, double-click the app in Finder/Launchpad to bring the window back.
 
 ## Config
 
@@ -70,15 +79,30 @@ command-line tool into `~/.local/bin` (toggleable in the window).
 
 ## Cutting a new release
 
+Bump `CFBundleShortVersionString` in `build.sh`, add a `CHANGELOG.md` entry, then:
+
 ```bash
-./build.sh                                   # build + install locally
-cd build && ditto -c -k --keepParent HDRHeic.app HDRHeic.app.zip && cd ..
 git tag -a vX.Y -m "HDRHeic X.Y" && git push origin vX.Y
-gh release create vX.Y build/HDRHeic.app.zip --title "HDRHeic X.Y" --notes "…"
 ```
 
+The GitHub Actions workflow (`.github/workflows/release.yml`) builds the app on a
+macOS runner and publishes `HDRHeic.dmg` + `HDRHeic.app.zip` to the release.
 The downloads page always links to `releases/latest`, so no page change is needed.
-(Requires a GitHub login with write access to the repo.)
+
+To do it by hand instead:
+
+```bash
+./build.sh
+cd build && ditto -c -k --keepParent HDRHeic.app HDRHeic.app.zip && cd ..
+gh release create vX.Y build/HDRHeic.dmg build/HDRHeic.app.zip --title "HDRHeic X.Y" --notes "…"
+```
+
+## Not notarized
+
+The app is ad-hoc signed, so the first launch needs right-click → **Open**.
+Removing that step requires an Apple Developer account ($99/year): sign with a
+Developer ID certificate + hardened runtime, then `notarytool submit` and
+`stapler staple` the DMG.
 
 ## Command line (the engine)
 

@@ -194,13 +194,20 @@ func isJPEG(_ url: URL) -> Bool {
     return ext == "jpg" || ext == "jpeg"
 }
 
-func runScan(_ config: Config, verbose: Bool) -> ScanResult {
-    var result = ScanResult()
-    let folder = URL(fileURLWithPath: expandTilde(config.watchFolder), isDirectory: true)
-    guard FileManager.default.fileExists(atPath: folder.path) else {
-        logLine("Watch folder does not exist: \(folder.path)")
-        return result
-    }
+/// One file that actually needs converting.
+struct WorkItem {
+    let source: URL
+    let destination: URL
+    let isRegenerate: Bool
+}
+
+/// Decides what needs doing without converting anything. Splitting planning from
+/// execution lets us report an accurate "i of n" progress.
+func planWork(_ config: Config, in folder: URL) -> (items: [WorkItem], skippedExisting: Int, skippedNonHDR: Int) {
+    var items: [WorkItem] = []
+    var skippedExisting = 0
+    var skippedNonHDR = 0
+
     for source in jpegURLs(in: folder, recursive: config.recursive) {
         let heic = source.deletingPathExtension().appendingPathExtension("heic")
         let heif = source.deletingPathExtension().appendingPathExtension("heif")
@@ -219,38 +226,70 @@ func runScan(_ config: Config, verbose: Bool) -> ScanResult {
                    sourceDate > outputDate {
                     isRegenerate = true
                 } else {
-                    result.skippedExisting += 1
+                    skippedExisting += 1
                     continue
                 }
             default: // "never"
-                result.skippedExisting += 1
+                skippedExisting += 1
                 continue
             }
         }
 
         if !hasGainMap(source) {
-            result.skippedNonHDR += 1
+            skippedNonHDR += 1
             continue
         }
+        items.append(WorkItem(source: source, destination: heic, isRegenerate: isRegenerate))
+    }
+    return (items, skippedExisting, skippedNonHDR)
+}
+
+/// `progress` emits machine-readable lines on stdout for the GUI:
+///   TOTAL <n>            once, before any work
+///   PROGRESS <i> <n> <filename>   after each processed file
+func runScan(_ config: Config, verbose: Bool, progress: Bool = false) -> ScanResult {
+    var result = ScanResult()
+    let folder = URL(fileURLWithPath: expandTilde(config.watchFolder), isDirectory: true)
+    guard FileManager.default.fileExists(atPath: folder.path) else {
+        logLine("Watch folder does not exist: \(folder.path)")
+        if progress { print("TOTAL 0") }
+        return result
+    }
+
+    let plan = planWork(config, in: folder)
+    result.skippedExisting = plan.skippedExisting
+    result.skippedNonHDR = plan.skippedNonHDR
+    let total = plan.items.count
+    if progress {
+        print("TOTAL \(total)")
+        fflush(stdout)
+    }
+
+    for (index, item) in plan.items.enumerated() {
         do {
-            try convert(source, to: heic)
-            if isRegenerate {
+            try convert(item.source, to: item.destination)
+            if item.isRegenerate {
                 result.regenerated += 1
-                logLine("Regenerated: \(source.lastPathComponent) → \(heic.lastPathComponent)")
+                logLine("Regenerated: \(item.source.lastPathComponent) → \(item.destination.lastPathComponent)")
             } else {
                 result.converted += 1
-                logLine("Converted: \(source.lastPathComponent) → \(heic.lastPathComponent)")
+                logLine("Converted: \(item.source.lastPathComponent) → \(item.destination.lastPathComponent)")
             }
             // Only ever remove a JPEG we just successfully converted.
             if config.deleteSource {
-                trashSource(source, into: &result)
+                trashSource(item.source, into: &result)
             }
         } catch {
             result.failed += 1
-            logLine("FAILED: \(source.lastPathComponent) — \(error)")
+            logLine("FAILED: \(item.source.lastPathComponent) — \(error)")
+        }
+        if progress {
+            print("PROGRESS \(index + 1) \(total) \(item.source.lastPathComponent)")
+            fflush(stdout)
         }
     }
-    if verbose || result.converted > 0 || result.failed > 0 {
+
+    if verbose || result.converted > 0 || result.regenerated > 0 || result.failed > 0 {
         logLine("Scan complete — \(result.summary)")
     }
     return result
@@ -357,7 +396,7 @@ case "set":
 case "scan":
     let config = loadConfig()
     if !FileManager.default.fileExists(atPath: configPath) { saveConfig(config) }
-    let result = runScan(config, verbose: true)
+    let result = runScan(config, verbose: true, progress: arguments.contains("--progress"))
     // Final line without a timestamp so callers (the app) can show it verbatim.
     print(result.summary)
 
