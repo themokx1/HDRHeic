@@ -59,4 +59,15 @@ mkdir -p "$INSTALL_DIR"
 rm -rf "$INSTALL_DIR/HDRHeic.app"
 cp -R "$APP" "$INSTALL_DIR/HDRHeic.app"
 
-echo "Done. Open: $INSTALL_DIR/HDRHeic.app"
+# Put the `hdrheic` CLI on PATH (symlink to the installed engine — survives rebuilds).
+BIN_DIR="$HOME/.local/bin"
+mkdir -p "$BIN_DIR"
+ln -sf "$INSTALL_DIR/HDRHeic.app/Contents/Resources/hdrheic" "$BIN_DIR/hdrheic"
+
+echo "Done."
+echo "  App: $INSTALL_DIR/HDRHeic.app"
+echo "  CLI: $BIN_DIR/hdrheic  (run 'hdrheic scan')"
+case ":$PATH:" in
+  *":$BIN_DIR:"*) : ;;
+  *) echo "  NOTE: add $BIN_DIR to your PATH to use 'hdrheic' directly." ;;
+esac

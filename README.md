@@ -80,12 +80,14 @@ The downloads page always links to `releases/latest`, so no page change is neede
 
 ## Command line (the engine)
 
-`~/Applications/HDRHeic.app/Contents/Resources/hdrheic`
+`build.sh` symlinks the engine to `~/.local/bin/hdrheic`, so once that's on your
+PATH you can just run `hdrheic`. (The real binary lives inside the app at
+`~/Applications/HDRHeic.app/Contents/Resources/hdrheic`.)
 
 ```
 hdrheic scan                 one conversion pass over the configured folder
 hdrheic watch                stay resident and convert new HDR JPEGs (debounced)
-hdrheic get <key>            watchFolder | debounceSeconds | recursive
+hdrheic get <key>            watchFolder | debounceSeconds | recursive | regenerate | deleteSource
 hdrheic set <key> <value>
 hdrheic config-path
 hdrheic version
@@ -93,10 +95,11 @@ hdrheic version
 
 ## Re-doing an earlier low-quality HEIC
 
-Because existing `.heic` files are never overwritten, a photo that already has a
-poor HEIC next to it (e.g. an 8-bit sRGB one from Finder's Quick Action) is skipped.
-To regenerate it: delete that `.heic` and run **Convert now** (or just re-drop the
-JPEG while the watcher is on).
+With the *Redo* policy set to **Newer** (default) or **Always**, a photo whose JPEG
+is newer than its HEIC is re-converted automatically. With **Never**, an existing
+HEIC is always kept — so a poor one next to a photo (e.g. an 8-bit sRGB one from
+Finder's Quick Action) is only replaced if you delete that `.heic` and run
+**Convert now**, or `touch` the JPEG so it's newer under *Newer*.
 
 ## Layout
 
