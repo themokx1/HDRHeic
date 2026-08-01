@@ -22,14 +22,15 @@ encoder, so it is fast (~1.5 s per photo) and light on the machine.
 
 ## The app
 
-`~/Applications/HDRHeic.app` — double-click for a small menu:
+`~/Applications/HDRHeic.app` — a small native (SwiftUI) window, all on one page:
 
-| Menu item | Action |
-|---|---|
-| **Convert now** | One pass over the configured folder (on demand). |
-| **Settings…** | Choose the watched folder and set the delay (seconds). |
-| **Install / Remove background watcher** | Turn the automatic login agent on/off. |
-| **Show log** | Open the log in Console. |
+- **Settings:** watched folder (with a *Choose…* button), the delay in seconds,
+  and an *Include subfolders* toggle. Changes save immediately and restart the
+  watcher if it is running.
+- **Background watcher:** a green/red status light (green = running, red = off)
+  with a *Turn On / Turn Off* button, plus a *Convert now* button for a manual pass.
+- **Recent conversions:** a live list of what was converted and when, read from
+  the log (auto-refreshes).
 
 ## Config
 
@@ -79,7 +80,7 @@ JPEG while the watcher is on).
 ## Layout
 
 ```
-Sources/hdrheic/main.swift   the engine (convert + scan + watch + config)
-app/HDRHeic.applescript      the control-panel app
-build.sh                     build + install
+Sources/hdrheic/main.swift     the engine (convert + scan + watch + config)
+Sources/HDRHeicApp/App.swift   the SwiftUI control-panel app
+build.sh                       build + install
 ```

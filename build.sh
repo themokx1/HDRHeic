@@ -1,30 +1,50 @@
 #!/bin/bash
-# Builds the hdrheic engine and assembles HDRHeic.app, then installs the app
-# to ~/Applications. Run:  ./build.sh
+# Builds the hdrheic engine + the SwiftUI HDRHeic.app, installs to ~/Applications.
+# Run:  ./build.sh
 set -euo pipefail
 
 cd "$(dirname "$0")"
-SRC="Sources/hdrheic/main.swift"
 BUILD="build"
 APP="$BUILD/HDRHeic.app"
 INSTALL_DIR="$HOME/Applications"
 
-echo "==> Compiling engine"
+echo "==> Compiling engine (hdrheic)"
 mkdir -p "$BUILD"
-xcrun swiftc -O -swift-version 5 "$SRC" -o "$BUILD/hdrheic"
+xcrun swiftc -O -swift-version 5 Sources/hdrheic/main.swift -o "$BUILD/hdrheic"
 
-echo "==> Building HDRHeic.app"
+echo "==> Compiling SwiftUI app"
 rm -rf "$APP"
-osacompile -o "$APP" app/HDRHeic.applescript
+mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
+xcrun swiftc -O -swift-version 5 -parse-as-library \
+    Sources/HDRHeicApp/App.swift \
+    -framework SwiftUI -framework AppKit \
+    -o "$APP/Contents/MacOS/HDRHeic"
 
-# Embed the engine binary as an app resource.
+echo "==> Assembling bundle"
 cp "$BUILD/hdrheic" "$APP/Contents/Resources/hdrheic"
 chmod +x "$APP/Contents/Resources/hdrheic"
 
-# A friendlier bundle identifier and name.
-/usr/libexec/PlistBuddy -c "Set :CFBundleName HDRHeic" "$APP/Contents/Info.plist" 2>/dev/null || true
-/usr/libexec/PlistBuddy -c "Add :CFBundleIdentifier string com.zoltanpalotai.hdrheic.app" "$APP/Contents/Info.plist" 2>/dev/null \
-  || /usr/libexec/PlistBuddy -c "Set :CFBundleIdentifier com.zoltanpalotai.hdrheic.app" "$APP/Contents/Info.plist" 2>/dev/null || true
+cat > "$APP/Contents/Info.plist" <<'PLIST'
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key><string>HDRHeic</string>
+	<key>CFBundleDisplayName</key><string>HDRHeic</string>
+	<key>CFBundleIdentifier</key><string>com.zoltanpalotai.hdrheic.app</string>
+	<key>CFBundleExecutable</key><string>HDRHeic</string>
+	<key>CFBundlePackageType</key><string>APPL</string>
+	<key>CFBundleShortVersionString</key><string>1.1</string>
+	<key>CFBundleVersion</key><string>2</string>
+	<key>LSMinimumSystemVersion</key><string>13.0</string>
+	<key>NSPrincipalClass</key><string>NSApplication</string>
+	<key>NSHighResolutionCapable</key><true/>
+</dict>
+</plist>
+PLIST
+
+# Ad-hoc sign so the app launches cleanly.
+codesign --force --deep --sign - "$APP" >/dev/null 2>&1 || true
 
 echo "==> Installing to $INSTALL_DIR"
 mkdir -p "$INSTALL_DIR"
