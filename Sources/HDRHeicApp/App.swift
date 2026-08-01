@@ -445,31 +445,61 @@ struct ContentView: View {
     }
 }
 
-@main
-struct HDRHeicApp: App {
-    var body: some Scene {
-        // A single on-demand window (no Dock icon — see LSUIElement in Info.plist).
-        Window("HDRHeic", id: "main") {
-            ContentView()
-                .onAppear { NSApp.activate(ignoringOtherApps: true) }
-        }
-        .windowResizability(.contentSize)
-
-        // Menu-bar presence: a small sun icon in the top-right menu bar.
-        MenuBarExtra("HDRHeic", systemImage: "sun.max.fill") {
-            MenuBarContent()
-        }
+func appLog(_ message: String) {
+    let path = NSHomeDirectory() + "/Library/Logs/HDRHeic.log"
+    let line = "[\(ISO8601DateFormatter().string(from: Date()))] \(message)\n"
+    if let handle = FileHandle(forWritingAtPath: path) {
+        handle.seekToEndOfFile(); handle.write(line.data(using: .utf8)!); try? handle.close()
+    } else {
+        try? line.data(using: .utf8)!.write(to: URL(fileURLWithPath: path))
     }
 }
 
-private struct MenuBarContent: View {
-    @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button("Open HDRHeic") {
-            openWindow(id: "main")
-            NSApp.activate(ignoringOtherApps: true)
+/// AppKit-driven menu-bar app: a real NSStatusItem (reliable), plus one window
+/// hosting the SwiftUI ContentView, opened from the menu or on launch.
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var statusItem: NSStatusItem!
+    private var window: NSWindow!
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        NSApp.setActivationPolicy(.accessory) // no Dock icon
+
+        statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        if let button = statusItem.button {
+            let image = NSImage(systemSymbolName: "sun.max.fill", accessibilityDescription: "HDRHeic")
+            image?.isTemplate = true
+            button.image = image
         }
-        Divider()
-        Button("Quit HDRHeic") { NSApplication.shared.terminate(nil) }
+        let menu = NSMenu()
+        menu.addItem(NSMenuItem(title: "Open HDRHeic", action: #selector(openWindow), keyEquivalent: ""))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(title: "Quit HDRHeic",
+                                action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        statusItem.menu = menu
+
+        let hosting = NSHostingController(rootView: ContentView())
+        window = NSWindow(contentViewController: hosting)
+        window.title = "HDRHeic"
+        window.styleMask = [.titled, .closable, .miniaturizable]
+        window.isReleasedWhenClosed = false
+        window.center()
+
+        appLog("GUI launched — menu-bar status item installed: \(statusItem.button != nil)")
+        openWindow() // show the window on first launch
+    }
+
+    @objc func openWindow() {
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+}
+
+@main
+struct HDRHeicApp: App {
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    var body: some Scene {
+        // No primary window scene — the AppDelegate owns the window. `Settings`
+        // is a harmless minimal scene so the App type has a body.
+        Settings { EmptyView() }
     }
 }
