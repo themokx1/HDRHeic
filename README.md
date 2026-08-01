@@ -58,6 +58,23 @@ cd ~/PhpstormProjects/hdrheic-src
 If the watcher is running, remove and re-install it from the app afterwards so it
 picks up the new binary.
 
+## Download
+
+Downloads page: **https://themokx1.github.io/HDRHeic/** (GitHub Pages, from `docs/`).
+The app itself ships as a GitHub Release asset (`HDRHeic.app.zip`).
+
+## Cutting a new release
+
+```bash
+./build.sh                                   # build + install locally
+cd build && ditto -c -k --keepParent HDRHeic.app HDRHeic.app.zip && cd ..
+git tag -a vX.Y -m "HDRHeic X.Y" && git push origin vX.Y
+gh release create vX.Y build/HDRHeic.app.zip --title "HDRHeic X.Y" --notes "…"
+```
+
+The downloads page always links to `releases/latest`, so no page change is needed.
+(Requires a GitHub login with write access to the repo.)
+
 ## Command line (the engine)
 
 `~/Applications/HDRHeic.app/Contents/Resources/hdrheic`
