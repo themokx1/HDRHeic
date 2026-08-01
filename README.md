@@ -15,8 +15,9 @@ encoder, so it is fast (~1.5 s per photo) and light on the machine.
 - **Debounced:** waits until the folder has been quiet for a few seconds before
   converting, so it never touches a file that is still being written. If more files
   keep appearing, it keeps waiting.
-- **Never overwrites:** a JPEG that already has a `.heic` (or `.heif`) sibling is
-  skipped — no double conversion.
+- **Redo policy** for a JPEG that already has a `.heic`/`.heif` sibling:
+  *Never* (keep it), *Newer* (re-convert when the JPEG is newer than the HEIC —
+  the default), or *Always* (re-convert every time).
 - **HDR only:** plain (non-gain-map) JPEGs are skipped.
 - Output goes next to the source: `photo.jpg` → `photo.heic`.
 
@@ -25,8 +26,8 @@ encoder, so it is fast (~1.5 s per photo) and light on the machine.
 `~/Applications/HDRHeic.app` — a small native (SwiftUI) window, all on one page:
 
 - **Settings:** watched folder (with a *Choose…* button), the delay in seconds,
-  and an *Include subfolders* toggle. Changes save immediately and restart the
-  watcher if it is running.
+  an *Include subfolders* toggle, and the *Redo* policy (Never / Newer / Always).
+  Changes save immediately and restart the watcher if it is running.
 - **Background watcher:** a green/red status light (green = running, red = off)
   with a *Turn On / Turn Off* button, plus a *Convert now* button for a manual pass.
 - **Recent conversions:** a live list of what was converted and when, read from
@@ -37,7 +38,7 @@ encoder, so it is fast (~1.5 s per photo) and light on the machine.
 `~/Library/Application Support/HDRHeic/config.json`
 
 ```json
-{ "debounceSeconds": 5, "recursive": true, "watchFolder": "~/Pictures/Exported" }
+{ "debounceSeconds": 5, "recursive": true, "regenerate": "newer", "watchFolder": "~/Pictures/Exported" }
 ```
 
 Edit via the app's **Settings…**, or by hand. Log: `~/Library/Logs/HDRHeic.log`.

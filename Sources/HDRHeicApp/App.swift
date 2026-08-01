@@ -40,6 +40,7 @@ final class ConfigStore: ObservableObject {
     @Published var watchFolder: String = expandTilde("~/Pictures/Exported")
     @Published var debounceSeconds: Int = 5
     @Published var recursive: Bool = true
+    @Published var regenerate: String = "newer"   // never | newer | always
 
     init() { load() }
 
@@ -50,6 +51,8 @@ final class ConfigStore: ObservableObject {
         if let delay = object["debounceSeconds"] as? Double { debounceSeconds = Int(delay) }
         if let delay = object["debounceSeconds"] as? Int { debounceSeconds = delay }
         if let recursiveValue = object["recursive"] as? Bool { recursive = recursiveValue }
+        if let policy = object["regenerate"] as? String,
+           ["never", "newer", "always"].contains(policy) { regenerate = policy }
     }
 
     func save() {
@@ -58,6 +61,7 @@ final class ConfigStore: ObservableObject {
             "watchFolder": watchFolder,
             "debounceSeconds": Double(debounceSeconds),
             "recursive": recursive,
+            "regenerate": regenerate,
         ]
         if let data = try? JSONSerialization.data(withJSONObject: object,
                                                   options: [.prettyPrinted, .sortedKeys]) {
@@ -146,16 +150,19 @@ final class LogStore: ObservableObject {
         var result: [LogEntry] = []
         for line in content.split(separator: "\n") {
             let string = String(line)
-            let isConverted = string.contains("] Converted: ")
-            let isFailed = string.contains("] FAILED: ")
-            guard isConverted || isFailed else { continue }
+            let marker: String
+            let ok: Bool
+            if string.contains("] Converted: ") { marker = "] Converted: "; ok = true }
+            else if string.contains("] Regenerated: ") { marker = "] Regenerated: "; ok = true }
+            else if string.contains("] FAILED: ") { marker = "] FAILED: "; ok = false }
+            else { continue }
             guard let close = string.firstIndex(of: "]") else { continue }
             let stamp = String(string[string.index(string.startIndex, offsetBy: 1)..<close])
             let time = inputFormatter.date(from: stamp).map { outputFormatter.string(from: $0) } ?? stamp
-            let marker = isConverted ? "] Converted: " : "] FAILED: "
             if let range = string.range(of: marker) {
-                let body = String(string[range.upperBound...])
-                result.append(LogEntry(time: time, text: body, ok: isConverted))
+                let prefix = marker.contains("Regenerated") ? "↻ " : ""
+                let body = prefix + String(string[range.upperBound...])
+                result.append(LogEntry(time: time, text: body, ok: ok))
             }
         }
         entries = result.reversed()   // newest first
@@ -182,7 +189,7 @@ struct ContentView: View {
             logBox
         }
         .padding(20)
-        .frame(width: 580, height: 660)
+        .frame(width: 580, height: 720)
         .onAppear { watcher.refresh(); log.refresh() }
         .onReceive(tick) { _ in watcher.refresh(); log.refresh() }
     }
@@ -226,8 +233,34 @@ struct ContentView: View {
                         .onChange(of: config.recursive) { saveAndReload() }
                     Spacer()
                 }
+                Divider()
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Redo").frame(width: 70, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Picker("", selection: $config.regenerate) {
+                            Text("Never").tag("never")
+                            Text("Newer").tag("newer")
+                            Text("Always").tag("always")
+                        }
+                        .pickerStyle(.segmented)
+                        .labelsHidden()
+                        .fixedSize()
+                        .onChange(of: config.regenerate) { saveAndReload() }
+                        Text(regenerateHint)
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                }
             }
             .padding(6)
+        }
+    }
+
+    private var regenerateHint: String {
+        switch config.regenerate {
+        case "never":  return "Keep existing HEICs — never overwrite."
+        case "always": return "Always re-convert, overwriting the HEIC."
+        default:       return "Re-convert when the JPEG is newer than its HEIC."
         }
     }
 

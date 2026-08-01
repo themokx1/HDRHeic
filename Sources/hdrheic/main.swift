@@ -51,6 +51,11 @@ struct Config {
     var watchFolder: String = "~/Pictures/Exported"
     var debounceSeconds: Double = 5
     var recursive: Bool = true
+    // Regeneration policy when a HEIC already exists next to the JPEG:
+    //   "never"  — keep it (never overwrite)
+    //   "newer"  — re-convert only when the JPEG is newer than the HEIC (default)
+    //   "always" — always re-convert, overwriting the HEIC
+    var regenerate: String = "newer"
 }
 
 func loadConfig() -> Config {
@@ -63,6 +68,8 @@ func loadConfig() -> Config {
     if let delay = object["debounceSeconds"] as? Double { config.debounceSeconds = delay }
     if let delay = object["debounceSeconds"] as? Int { config.debounceSeconds = Double(delay) }
     if let recursive = object["recursive"] as? Bool { config.recursive = recursive }
+    if let regenerate = object["regenerate"] as? String,
+       ["never", "newer", "always"].contains(regenerate) { config.regenerate = regenerate }
     return config
 }
 
@@ -73,6 +80,7 @@ func saveConfig(_ config: Config) {
         "watchFolder": config.watchFolder,
         "debounceSeconds": config.debounceSeconds,
         "recursive": config.recursive,
+        "regenerate": config.regenerate,
     ]
     if let data = try? JSONSerialization.data(withJSONObject: object,
                                               options: [.prettyPrinted, .sortedKeys]) {
@@ -126,15 +134,22 @@ func convert(_ source: URL, to destination: URL) throws {
 
 struct ScanResult {
     var converted = 0
+    var regenerated = 0
     var skippedExisting = 0
     var skippedNonHDR = 0
     var failed = 0
 
     var summary: String {
-        "Converted: \(converted), skipped (already HEIC): \(skippedExisting), "
-            + "skipped (not HDR): \(skippedNonHDR)"
+        "Converted: \(converted)"
+            + (regenerated > 0 ? ", regenerated: \(regenerated)" : "")
+            + ", skipped (up to date): \(skippedExisting)"
+            + ", skipped (not HDR): \(skippedNonHDR)"
             + (failed > 0 ? ", failed: \(failed)" : "")
     }
+}
+
+func modificationDate(_ url: URL) -> Date? {
+    (try? FileManager.default.attributesOfItem(atPath: url.path))?[.modificationDate] as? Date
 }
 
 func jpegURLs(in folder: URL, recursive: Bool) -> [URL] {
@@ -168,19 +183,43 @@ func runScan(_ config: Config, verbose: Bool) -> ScanResult {
     for source in jpegURLs(in: folder, recursive: config.recursive) {
         let heic = source.deletingPathExtension().appendingPathExtension("heic")
         let heif = source.deletingPathExtension().appendingPathExtension("heif")
-        if FileManager.default.fileExists(atPath: heic.path)
-            || FileManager.default.fileExists(atPath: heif.path) {
-            result.skippedExisting += 1
-            continue
+        let existingOutput: URL? = FileManager.default.fileExists(atPath: heic.path) ? heic
+            : (FileManager.default.fileExists(atPath: heif.path) ? heif : nil)
+
+        var isRegenerate = false
+        if let output = existingOutput {
+            switch config.regenerate {
+            case "always":
+                isRegenerate = true
+            case "newer":
+                // Regenerate only when the JPEG is newer than the existing HEIC.
+                if let sourceDate = modificationDate(source),
+                   let outputDate = modificationDate(output),
+                   sourceDate > outputDate {
+                    isRegenerate = true
+                } else {
+                    result.skippedExisting += 1
+                    continue
+                }
+            default: // "never"
+                result.skippedExisting += 1
+                continue
+            }
         }
+
         if !hasGainMap(source) {
             result.skippedNonHDR += 1
             continue
         }
         do {
             try convert(source, to: heic)
-            result.converted += 1
-            logLine("Converted: \(source.lastPathComponent) → \(heic.lastPathComponent)")
+            if isRegenerate {
+                result.regenerated += 1
+                logLine("Regenerated: \(source.lastPathComponent) → \(heic.lastPathComponent)")
+            } else {
+                result.converted += 1
+                logLine("Converted: \(source.lastPathComponent) → \(heic.lastPathComponent)")
+            }
         } catch {
             result.failed += 1
             logLine("FAILED: \(source.lastPathComponent) — \(error)")
@@ -266,6 +305,7 @@ case "get":
     case "watchFolder": print(expandTilde(config.watchFolder))
     case "debounceSeconds": print(String(format: "%g", config.debounceSeconds))
     case "recursive": print(config.recursive ? "true" : "false")
+    case "regenerate": print(config.regenerate)
     default: FileHandle.standardError.write("unknown key\n".data(using: .utf8)!); exit(2)
     }
 
@@ -277,6 +317,11 @@ case "set":
     case "watchFolder": config.watchFolder = value
     case "debounceSeconds": config.debounceSeconds = max(1, Double(value) ?? config.debounceSeconds)
     case "recursive": config.recursive = (value == "true" || value == "1" || value == "yes")
+    case "regenerate":
+        guard ["never", "newer", "always"].contains(value) else {
+            FileHandle.standardError.write("regenerate must be never|newer|always\n".data(using: .utf8)!); exit(2)
+        }
+        config.regenerate = value
     default: FileHandle.standardError.write("unknown key\n".data(using: .utf8)!); exit(2)
     }
     saveConfig(config)
